@@ -1,0 +1,405 @@
+
+
+'use client';
+
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import React from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+
+import { Button } from '@/components/ui/button';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, ShoppingCart, IndianRupee } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Separator } from '@/components/ui/separator';
+import type { CropBatch } from '@/lib/types';
+import { listCropForSale } from './actions';
+
+
+const formSchema = (registeredBatches: CropBatch[]) => z.object({
+  batchId: z.string().min(1, 'Batch is required'),
+  quantity: z.coerce.number().min(0.1, 'Quantity must be positive'),
+  harvestDate: z.string().min(1, 'Harvest date is required'),
+  location: z.string().min(1, 'Location is required'),
+  price: z.coerce.number().min(0, "Price must be non-negative"),
+  deliveryOption: z.enum(['delivery', 'takeaway']),
+  deliveryRadius: z.coerce.number().optional(),
+  deliveryCharges: z.coerce.number().optional(),
+  takeawayAddress: z.string().optional(),
+  remarks: z.string().optional(),
+}).superRefine((data, ctx) => {
+    if (data.deliveryOption === 'delivery') {
+        if (data.deliveryRadius === undefined || data.deliveryRadius <= 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Delivery radius is required and must be positive.',
+                path: ['deliveryRadius'],
+            });
+        }
+    } else if (data.deliveryOption === 'takeaway') {
+        if (!data.takeawayAddress || data.takeawayAddress.trim() === '') {
+             ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Takeaway address is required.',
+                path: ['takeawayAddress'],
+            });
+        }
+    }
+    
+    if (data.batchId) {
+        const selectedBatch = registeredBatches.find(b => b.id === data.batchId);
+        if (selectedBatch && data.quantity > selectedBatch.quantity) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Quantity cannot exceed the available ${selectedBatch.quantity} kg.`,
+                path: ['quantity'],
+            });
+        }
+    }
+});
+
+
+export function PricePredictorClient({ registeredBatches }: { registeredBatches: CropBatch[] }) {
+  const searchParams = useSearchParams();
+  const [isLoading, setIsLoading] = React.useState(false);
+  const { toast } = useToast();
+  const router = useRouter();
+  
+  const dynamicFormSchema = formSchema(registeredBatches);
+  type FormValues = z.infer<typeof dynamicFormSchema>;
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(dynamicFormSchema),
+    defaultValues: {
+      batchId: searchParams.get('batchId') || '',
+      quantity: 0,
+      harvestDate: '',
+      location: '',
+      price: 0,
+      deliveryOption: 'delivery',
+      deliveryRadius: 0,
+      deliveryCharges: 0,
+      takeawayAddress: '',
+      remarks: '',
+    },
+  });
+  
+  React.useEffect(() => {
+    const batchId = searchParams.get('batchId');
+    if (batchId) {
+        const selectedBatch = registeredBatches.find(b => b.id === batchId);
+        if (selectedBatch) {
+            form.reset({
+                batchId: selectedBatch.id,
+                quantity: selectedBatch.quantity,
+                harvestDate: selectedBatch.harvestDate,
+                location: selectedBatch.farmLocation,
+                price: form.getValues('price') || 0,
+                deliveryOption: form.getValues('deliveryOption') || 'delivery',
+                remarks: form.getValues('remarks') || '',
+                deliveryRadius: form.getValues('deliveryRadius') || 0,
+                deliveryCharges: form.getValues('deliveryCharges') || 0,
+                takeawayAddress: form.getValues('takeawayAddress') || '',
+            });
+        }
+    }
+  }, [searchParams, form, registeredBatches]);
+
+
+  async function onSubmit(values: FormValues) {
+    setIsLoading(true);
+
+    const formData = new FormData();
+    Object.entries(values).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+            formData.append(key, String(value));
+        }
+    });
+    
+    const result = await listCropForSale(formData);
+
+    if(result.success) {
+        toast({
+            title: "Crop Listed!",
+            description: result.message,
+        });
+        router.push('/dashboard/my-batches');
+    } else {
+        toast({
+            title: "Listing Failed",
+            description: result.error,
+            variant: "destructive"
+        });
+    }
+
+    setIsLoading(false);
+  }
+
+  const handleBatchChange = (batchId: string) => {
+      const selectedBatch = registeredBatches.find(b => b.id === batchId);
+      if (selectedBatch) {
+          form.setValue('batchId', selectedBatch.id);
+          form.setValue('quantity', selectedBatch.quantity);
+          form.setValue('harvestDate', selectedBatch.harvestDate);
+          form.setValue('location', selectedBatch.farmLocation);
+          form.trigger('quantity'); // Trigger validation for quantity
+      }
+  }
+  
+  const watchedValues = form.watch();
+  const basePrice = (watchedValues.quantity || 0) * (watchedValues.price || 0);
+  const grandTotal = basePrice;
+
+
+  return (
+    <div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Sell Your Crop</CardTitle>
+          <CardDescription>
+            Fill in the details to list your crop batch on the marketplace.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="batchId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Batch</FormLabel>
+                        <Select onValueChange={handleBatchChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a registered batch" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {registeredBatches.length > 0 ? registeredBatches.map(batch => (
+                                <SelectItem key={batch.id} value={batch.id}>
+                                    {batch.cropType} ({batch.variety}) - {batch.quantity}kg available
+                                </SelectItem>
+                            )) : <SelectItem value="-" disabled>No registered batches found</SelectItem>}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Quantity to Sell (in kg)</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="e.g., 5000" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={form.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Listing Price (per kg in ₹)</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="e.g., 25" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="harvestDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Harvest Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} readOnly />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="location"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Location</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Punjab, India" {...field} readOnly />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+               </div>
+                <FormField
+                  control={form.control}
+                  name="deliveryOption"
+                  render={({ field }) => (
+                    <FormItem className="space-y-3">
+                      <FormLabel>Delivery Option</FormLabel>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          className="flex space-x-4"
+                        >
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="delivery" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Delivery
+                            </FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="takeaway" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Takeaway
+                            </FormLabel>
+                          </FormItem>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {watchedValues.deliveryOption === 'delivery' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                            control={form.control}
+                            name="deliveryRadius"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Delivery Radius (in km)</FormLabel>
+                                <FormControl>
+                                <Input type="number" placeholder="e.g., 50" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="deliveryCharges"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Delivery Charges (in ₹ per km, optional)</FormLabel>
+                                <FormControl>
+                                <Input type="number" placeholder="e.g., 10" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                    </div>
+                )}
+                
+                {watchedValues.deliveryOption === 'takeaway' && (
+                     <FormField
+                        control={form.control}
+                        name="takeawayAddress"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Takeaway Address</FormLabel>
+                            <FormControl>
+                            <Textarea placeholder="Enter the full address for pickup" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                )}
+
+              <FormField
+                control={form.control}
+                name="remarks"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Remarks (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Describe any other relevant factors, e.g., 'Organically grown, minimal pesticides used.'" {...field} />
+                    </FormControl>
+                     <FormDescription>
+                      Mention any special qualities or conditions of your crop.
+                     </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="space-y-4 rounded-lg border bg-muted/50 p-4">
+                  <h3 className="text-lg font-semibold">Total Price Calculation</h3>
+                  <Separator />
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                        <span className="text-muted-foreground">Base Price ({watchedValues.quantity || 0}kg x ₹{watchedValues.price || 0}/kg)</span>
+                        <span className="font-medium flex items-center"><IndianRupee className="h-4 w-4 mr-1" />{basePrice.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between font-bold text-lg">
+                      <span>Grand Total</span>
+                       <div className="flex items-center">
+                            <span className="flex items-center"><IndianRupee className="h-5 w-5 mr-1" />{grandTotal.toLocaleString('en-IN')}</span>
+                            {watchedValues.deliveryOption === 'delivery' && <span className="ml-1 text-sm font-medium text-muted-foreground">+ Delivery Fee</span>}
+                       </div>
+                  </div>
+              </div>
+
+              <div className="flex justify-end pt-6">
+                <Button type="submit" className="w-full md:w-auto" disabled={isLoading}>
+                    {isLoading ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Listing...
+                    </>
+                    ) : (
+                    <>
+                        <ShoppingCart className="mr-2 h-4 w-4" />
+                        List Crop for Sale
+                    </>
+                    )}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+    
