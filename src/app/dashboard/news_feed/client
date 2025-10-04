@@ -1,0 +1,72 @@
+
+'use client';
+
+import type { NewsArticle } from '@/ai/flows/news-feed-flow';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import Image from 'next/image';
+import { Button } from '@/components/ui/button';
+import { Heart, MessageSquare, Share2 } from 'lucide-react';
+import React from 'react';
+
+export function NewsFeedClient({ articles }: { articles: NewsArticle[] }) {
+    
+  const getBadgeVariant = (category: string) => {
+    switch (category.toLowerCase()) {
+      case 'market update':
+        return 'default';
+      case 'policy':
+        return 'secondary';
+      case 'technology':
+        return 'outline';
+      case 'weather':
+        return 'destructive';
+      default:
+        return 'secondary';
+    }
+  };
+
+  return (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {articles.map((article, index) => (
+        <Card key={index} className="flex flex-col">
+          <CardHeader>
+             <div className="relative h-40 w-full mb-4">
+                <Image
+                    src={`https://picsum.photos/seed/${article.imageHint.replace(/\s/g, '-')}/600/400`}
+                    alt={article.headline}
+                    fill
+                    className="rounded-t-lg object-cover"
+                    data-ai-hint={article.imageHint}
+                />
+             </div>
+            <div className="flex items-center justify-between">
+                <Badge variant={getBadgeVariant(article.category)}>{article.category}</Badge>
+                <p className="text-xs text-muted-foreground">{article.publishedDate}</p>
+            </div>
+            <CardTitle className="pt-2">{article.headline}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-grow">
+            <p className="text-muted-foreground">{article.summary}</p>
+          </CardContent>
+          <CardFooter className="flex justify-between items-center border-t pt-4 mt-auto">
+            <div className="flex gap-1 sm:gap-2">
+                <Button variant="ghost" size="sm" className="flex items-center gap-2 text-muted-foreground">
+                    <Heart className="h-5 w-5" />
+                    <span className="text-sm font-normal">{Math.floor(Math.random() * 50) + 1}</span>
+                </Button>
+                <Button variant="ghost" size="sm" className="flex items-center gap-2 text-muted-foreground">
+                    <MessageSquare className="h-5 w-5" />
+                     <span className="text-sm font-normal">{Math.floor(Math.random() * 15) + 1}</span>
+                </Button>
+                <Button variant="ghost" size="sm" className="flex items-center gap-2 text-muted-foreground">
+                    <Share2 className="h-5 w-5" />
+                </Button>
+            </div>
+             <Button variant="link" className="p-0">Read More</Button>
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
+}
