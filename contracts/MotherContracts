@@ -1,0 +1,383 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+contract BatchToken is ERC20, ERC20Burnable, AccessControl, Pausable {
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
+    string public batchId;
+    string public commodity;     
+    string public originFarm;    
+    uint256 public unitsPerToken; 
+
+    event Paused(address account);
+    event Unpaused(address account);
+
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        string memory _batchId,
+        string memory _commodity,
+        string memory _originFarm,
+        uint256 _initialSupply,
+        uint256 _unitsPerToken,
+        address admin,
+        address minter
+    ) ERC20(_name, _symbol) {
+        batchId = _batchId;
+        commodity = _commodity;
+        originFarm = _originFarm;
+        unitsPerToken = _unitsPerToken;
+
+        _setupRole(DEFAULT_ADMIN_ROLE, admin);
+        _setupRole(MINTER_ROLE, minter);
+
+        if (_initialSupply > 0) {
+            _mint(minter, _initialSupply);
+        }
+    }
+
+    function mint(address to, uint256 amount) public onlyRole(MINTER_ROLE) {
+        _mint(to, amount);
+    }
+
+    function pause() public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _pause();
+        emit Paused(msg.sender);
+    }
+
+    function unpause() public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _unpause();
+        emit Unpaused(msg.sender);
+    }
+
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal override {
+        super._beforeTokenTransfer(from, to, amount);
+        require(!paused(), "Transfers are paused");
+    }
+}
+
+contract BatchTokenFactory is AccessControl {
+    bytes32 public constant FACTORY_ADMIN = keccak256("FACTORY_ADMIN");
+
+    address[] public batches;
+    mapping(string => address) public batchIdToToken;
+
+    event BatchCreated(string batchId, address tokenAddress, address creator);
+
+    constructor(address admin) {
+        _setupRole(DEFAULT_ADMIN_ROLE, admin);
+        _setupRole(FACTORY_ADMIN, admin);
+    }
+
+    function createBatchToken(
+        string memory name,
+        string memory symbol,
+        string memory batchId,
+        string memory commodity,
+        string memory originFarm,
+        uint256 initialSupply,
+        uint256 unitsPerToken,
+        address minter
+    ) external onlyRole(FACTORY_ADMIN) returns (address) {
+        require(batchIdToToken[batchId] == address(0), "Batch already exists");
+        BatchToken token = new BatchToken(
+            name,
+            symbol,
+            batchId,
+            commodity,
+            originFarm,
+            initialSupply,
+            unitsPerToken,
+            msg.sender,
+            minter
+        );
+        batches.push(address(token));
+        batchIdToToken[batchId] = address(token);
+        emit BatchCreated(batchId, address(token), msg.sender);
+        return address(token);
+    }
+
+    function getBatches() external view returns (address[] memory) {
+        return batches;
+    }
+}
+
+contract Marketplace is AccessControl, Pausable {
+    bytes32 public constant MARKET_ADMIN = keccak256("MARKET_ADMIN");
+    bytes32 public constant PAYMENT_CONFIRMER = keccak256("PAYMENT_CONFIRMER");
+
+    struct Listing {
+        address tokenAddress;
+        address seller;
+        uint256 pricePerToken;
+        address paymentToken;
+        uint256 quantityAvailable;
+        bool active;
+    }
+
+    struct Order {
+        uint256 listingId;
+        address buyer;
+        uint256 quantity;
+        uint256 totalPrice;
+        string fiatRef;
+        bool paidOnChain;
+        bool completed;
+        bool cancelled;
+    }
+
+    Listing[] public listings;
+    Order[] public orders;
+
+    event Listed(uint256 listingId, address token, address seller, uint256 qty, uint256 price, address paymentToken);
+    event Delisted(uint256 listingId);
+    event OrderPlaced(uint256 orderId, uint256 listingId, address buyer, uint256 qty, string fiatRef);
+    event OrderPaidOnChain(uint256 orderId, address payer);
+    event OrderCompleted(uint256 orderId);
+    event OrderCancelled(uint256 orderId);
+
+    constructor(address admin) {
+        _setupRole(DEFAULT_ADMIN_ROLE, admin);
+        _setupRole(MARKET_ADMIN, admin);
+        _setupRole(PAYMENT_CONFIRMER, admin);
+    }
+
+    modifier onlyActiveListing(uint256 listingId) {
+        require(listingId < listings.length, "Invalid listing");
+        require(listings[listingId].active, "Listing not active");
+        _;
+    }
+
+    function createListing(
+        address tokenAddress,
+        uint256 quantityAvailable,
+        uint256 pricePerToken,
+        address paymentToken
+    ) external whenNotPaused returns (uint256) {
+        require(quantityAvailable > 0, "Quantity must be > 0");
+        require(IERC20(tokenAddress).balanceOf(msg.sender) >= quantityAvailable, "Not enough tokens");
+        require(IERC20(tokenAddress).transferFrom(msg.sender, address(this), quantityAvailable), "Token transfer failed");
+
+        Listing memory l = Listing({
+            tokenAddress: tokenAddress,
+            seller: msg.sender,
+            pricePerToken: pricePerToken,
+            paymentToken: paymentToken,
+            quantityAvailable: quantityAvailable,
+            active: true
+        });
+
+        listings.push(l);
+        uint256 listingId = listings.length - 1;
+        emit Listed(listingId, tokenAddress, msg.sender, quantityAvailable, pricePerToken, paymentToken);
+        return listingId;
+    }
+
+    function delist(uint256 listingId) external {
+        Listing storage l = listings[listingId];
+        require(l.active, "Not active");
+        require(msg.sender == l.seller || hasRole(MARKET_ADMIN, msg.sender), "Not authorized");
+
+        l.active = false;
+        if (l.quantityAvailable > 0) {
+            IERC20(l.tokenAddress).transfer(l.seller, l.quantityAvailable);
+            l.quantityAvailable = 0;
+        }
+
+        emit Delisted(listingId);
+    }
+
+    function placeOrder(uint256 listingId, uint256 quantity, string memory fiatRef) external whenNotPaused onlyActiveListing(listingId) returns (uint256) {
+        Listing storage l = listings[listingId];
+        require(quantity > 0 && quantity <= l.quantityAvailable, "Invalid quantity");
+
+        uint256 totalPrice = l.pricePerToken * quantity;
+
+        Order memory o = Order({
+            listingId: listingId,
+            buyer: msg.sender,
+            quantity: quantity,
+            totalPrice: totalPrice,
+            fiatRef: fiatRef,
+            paidOnChain: false,
+            completed: false,
+            cancelled: false
+        });
+
+        if (l.paymentToken != address(0)) {
+            require(IERC20(l.paymentToken).transferFrom(msg.sender, address(this), totalPrice), "Payment failed");
+            o.paidOnChain = true;
+            emit OrderPaidOnChain(orders.length, msg.sender);
+        }
+
+        l.quantityAvailable -= quantity;
+        if (l.quantityAvailable == 0) l.active = false;
+
+        orders.push(o);
+        uint256 orderId = orders.length - 1;
+        emit OrderPlaced(orderId, listingId, msg.sender, quantity, fiatRef);
+
+        if (o.paidOnChain) {
+            IERC20(l.paymentToken).transfer(l.seller, totalPrice);
+            IERC20(l.tokenAddress).transfer(o.buyer, o.quantity);
+            orders[orderId].completed = true;
+            emit OrderCompleted(orderId);
+        }
+
+        return orderId;
+    }
+
+    function confirmFiatPayment(uint256 orderId) external onlyRole(PAYMENT_CONFIRMER) whenNotPaused {
+        require(orderId < orders.length, "Invalid order");
+        Order storage o = orders[orderId];
+        require(!o.completed && !o.cancelled, "Already handled");
+
+        Listing storage l = listings[o.listingId];
+        IERC20(l.tokenAddress).transfer(o.buyer, o.quantity);
+
+        o.completed = true;
+        emit OrderCompleted(orderId);
+    }
+
+    function cancelOrder(uint256 orderId) external whenNotPaused {
+        require(orderId < orders.length, "Invalid order");
+        Order storage o = orders[orderId];
+        require(!o.completed && !o.cancelled, "Already handled");
+
+        Listing storage l = listings[o.listingId];
+        require(msg.sender == o.buyer || hasRole(MARKET_ADMIN, msg.sender), "Not authorized");
+
+        o.cancelled = true;
+        l.quantityAvailable += o.quantity;
+        if (!l.active && l.quantityAvailable > 0) l.active = true;
+
+        if (o.paidOnChain) {
+            IERC20(l.paymentToken).transfer(o.buyer, o.totalPrice);
+        }
+
+        emit OrderCancelled(orderId);
+    }
+
+    function pause() external onlyRole(MARKET_ADMIN) { _pause(); }
+    function unpause() external onlyRole(MARKET_ADMIN) { _unpause(); }
+
+    function listingsCount() external view returns (uint256) { return listings.length; }
+    function ordersCount() external view returns (uint256) { return orders.length; }
+}
+
+contract IoTRegistry is AccessControl {
+    bytes32 public constant IOT_DEVICE = keccak256("IOT_DEVICE");
+
+    struct Telemetry {
+        string batchId;
+        uint256 timestamp;
+        string stage;
+        string dataHash;
+        string shortNote;
+    }
+
+    Telemetry[] public telemetries;
+    mapping(string => uint256[]) internal batchToTelemetry;
+
+    event TelemetryRecorded(uint256 index, string batchId, string stage, uint256 timestamp, string dataHash);
+
+    constructor(address admin) {
+        _setupRole(DEFAULT_ADMIN_ROLE, admin);
+    }
+
+    function recordTelemetry(string memory batchId, string memory stage, string memory dataHash, string memory shortNote) external onlyRole(IOT_DEVICE) returns (uint256) {
+        Telemetry memory t = Telemetry(batchId, block.timestamp, stage, dataHash, shortNote);
+        telemetries.push(t);
+        uint256 idx = telemetries.length - 1;
+        batchToTelemetry[batchId].push(idx);
+        emit TelemetryRecorded(idx, batchId, stage, block.timestamp, dataHash);
+        return idx;
+    }
+
+    function addDevice(address device) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _grantRole(IOT_DEVICE, device);
+    }
+
+    function removeDevice(address device) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _revokeRole(IOT_DEVICE, device);
+    }
+
+    function telemetryCount() external view returns (uint256) { return telemetries.length; }
+
+    function getTelemetry(uint256 index) external view returns (Telemetry memory) {
+        require(index < telemetries.length, "Out of range");
+        return telemetries[index];
+    }
+
+    function getTelemetryForBatch(string memory batchId) external view returns (Telemetry[] memory) {
+        uint256[] storage idxs = batchToTelemetry[batchId];
+        Telemetry[] memory out = new Telemetry[](idxs.length);
+        for (uint i = 0; i < idxs.length; i++) {
+            out[i] = telemetries[idxs[i]];
+        }
+        return out;
+    }
+}
+
+contract AgriSupplyChainManager is AccessControl {
+    bytes32 public constant MANAGER_ADMIN = keccak256("MANAGER_ADMIN");
+
+    BatchTokenFactory public factory;
+    Marketplace public marketplace;
+    IoTRegistry public iotRegistry;
+
+    event DeployedFactory(address factory);
+    event DeployedMarketplace(address marketplace);
+    event DeployedIoTRegistry(address iotRegistry);
+
+    constructor() {
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _setupRole(MANAGER_ADMIN, msg.sender);
+    }
+
+    function deployFactory() external onlyRole(MANAGER_ADMIN) returns (address) {
+        factory = new BatchTokenFactory(address(this));
+        emit DeployedFactory(address(factory));
+        return address(factory);
+    }
+
+    function deployMarketplace() external onlyRole(MANAGER_ADMIN) returns (address) {
+        marketplace = new Marketplace(address(this));
+        emit DeployedMarketplace(address(marketplace));
+        return address(marketplace);
+    }
+
+    function deployIoTRegistry() external onlyRole(MANAGER_ADMIN) returns (address) {
+        iotRegistry = new IoTRegistry(address(this));
+        emit DeployedIoTRegistry(address(iotRegistry));
+        return address(iotRegistry);
+    }
+
+    function createBatchViaFactory(
+        string memory name,
+        string memory symbol,
+        string memory batchId,
+        string memory commodity,
+        string memory originFarm,
+        uint256 initialSupply,
+        uint256 unitsPerToken,
+        address minter
+    ) external onlyRole(MANAGER_ADMIN) returns (address) {
+        require(address(factory) != address(0), "Factory not ready");
+        return factory.createBatchToken(name, symbol, batchId, commodity, originFarm, initialSupply, unitsPerToken, minter);
+    }
+
+    function grantMarketRole(bytes32 role, address account) external onlyRole(MANAGER_ADMIN) {
+        marketplace.grantRole(role, account);
+    }
+
+    function grantIoTDevice(address device) external onlyRole(MANAGER_ADMIN) {
+        iotRegistry.addDevice(device);
+    }
+}
