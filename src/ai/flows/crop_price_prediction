@@ -1,0 +1,64 @@
+'use server';
+
+/**
+ * @fileOverview An AI agent to predict the optimal price for a crop batch.
+ *
+ * - predictCropPrice - A function that predicts the optimal price for a crop batch.
+ * - CropPricePredictionInput - The input type for the predictCropPrice function.
+ * - CropPricePredictionOutput - The return type for the predictCropPrice function.
+ */
+
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
+
+const CropPricePredictionInputSchema = z.object({
+  cropType: z.string().describe('The type of crop (e.g., wheat, corn, soy).'),
+  quantity: z.number().describe('The quantity of the crop batch (e.g., in kg).'),
+  harvestDate: z.string().describe('The harvest date of the crop batch (YYYY-MM-DD).'),
+  location: z.string().describe('The location where the crop was harvested.'),
+  marketTrends: z.string().optional().describe('A description of current market trends.'),
+  seasonality: z.string().optional().describe('A description of seasonal factors affecting price.'),
+});
+export type CropPricePredictionInput = z.infer<typeof CropPricePredictionInputSchema>;
+
+const CropPricePredictionOutputSchema = z.object({
+  predictedPrice: z.number().describe('The predicted optimal price for the crop batch (e.g., in INR per kg).'),
+  reasoning: z.string().describe('The AI’s reasoning for the predicted price, including factors considered.'),
+  confidence: z.number().describe('A confidence score (0-1) for the price prediction.'),
+});
+export type CropPricePredictionOutput = z.infer<typeof CropPricePredictionOutputSchema>;
+
+export async function predictCropPrice(input: CropPricePredictionInput): Promise<CropPricePredictionOutput> {
+  return cropPricePredictionFlow(input);
+}
+
+const prompt = ai.definePrompt({
+  name: 'cropPricePredictionPrompt',
+  input: {schema: CropPricePredictionInputSchema},
+  output: {schema: CropPricePredictionOutputSchema},
+  prompt: `You are an AI-powered agricultural economist specializing in crop price prediction.
+
+  Based on the following information, predict the optimal price for the crop batch.
+
+  Crop Type: {{{cropType}}}
+  Quantity: {{{quantity}}} kg
+  Harvest Date: {{{harvestDate}}}
+  Location: {{{location}}}
+  Market Trends: {{{marketTrends}}}
+  Seasonality: {{{seasonality}}}
+
+  Provide a predicted price, your reasoning for the prediction, and a confidence score (0-1).
+  `,
+});
+
+const cropPricePredictionFlow = ai.defineFlow(
+  {
+    name: 'cropPricePredictionFlow',
+    inputSchema: CropPricePredictionInputSchema,
+    outputSchema: CropPricePredictionOutputSchema,
+  },
+  async input => {
+    const {output} = await prompt(input);
+    return output!;
+  }
+);
