@@ -1,0 +1,80 @@
+
+'use server';
+
+import { promises as fs } from 'fs';
+import path from 'path';
+import type { User } from '@/lib/types';
+import { z } from 'zod';
+
+const usersFilePath = path.join(process.cwd(), 'src', 'lib', 'db', 'users.json');
+
+async function getUsers(): Promise<User[]> {
+  try {
+    const data = await fs.readFile(usersFilePath, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+}
+
+async function saveUsers(users: User[]) {
+  await fs.writeFile(usersFilePath, JSON.stringify(users, null, 2), 'utf-8');
+}
+
+export async function getCurrentUser(userId: string): Promise<User | null> {
+    try {
+        const users = await getUsers();
+        const user = users.find(u => u.id === userId);
+        return user || null;
+    } catch (error) {
+        console.error("Failed to get current user:", error);
+        return null;
+    }
+}
+
+const userUpdateSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  location: z.string().min(1, 'Location is required'),
+  avatarUrl: z.string().url("Please enter a valid URL.").optional().or(z.literal('')),
+});
+
+export type UserUpdateData = z.infer<typeof userUpdateSchema>;
+
+
+export async function updateUserDetails(userId: string, data: UserUpdateData) {
+    try {
+        const validation = userUpdateSchema.safeParse(data);
+        if(!validation.success) {
+            return { success: false, error: "Invalid data provided." };
+        }
+
+        const users = await getUsers();
+        const userIndex = users.findIndex(u => u.id === userId);
+
+        if (userIndex === -1) {
+            return { success: false, error: 'User not found.' };
+        }
+
+        const updatedUser = {
+            ...users[userIndex],
+            ...validation.data,
+        };
+
+        users[userIndex] = updatedUser;
+        await saveUsers(users);
+
+        return { success: true, user: updatedUser };
+
+    } catch (error: any) {
+        console.error('DB save error:', error);
+        let errorMessage = 'An unexpected error occurred during the update.';
+        if (error.message) {
+            errorMessage = error.message;
+        }
+        return { success: false, error: errorMessage };
+    }
+}
