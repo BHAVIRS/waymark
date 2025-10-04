@@ -1,0 +1,85 @@
+
+'use server';
+
+import { getCropBatches, saveCropBatches } from '@/lib/data';
+import type { CropBatch } from '@/lib/types';
+import { revalidatePath } from 'next/cache';
+import { v4 as uuidv4 } from 'uuid';
+
+export async function getRegisteredBatchesForFarmer(farmerId: string): Promise<CropBatch[]> {
+  const allBatches = await getCropBatches();
+  // Return only original registered batches (not partials that are already listed)
+  return allBatches.filter(batch => batch.farmerId === farmerId && batch.status === 'registered');
+}
+
+export async function listCropForSale(formData: FormData) {
+    const rawFormData = Object.fromEntries(formData.entries());
+    const batchId = rawFormData.batchId as string;
+    const quantityToList = Number(rawFormData.quantity);
+    const price = Number(rawFormData.price);
+    const deliveryOption = rawFormData.deliveryOption as 'delivery' | 'takeaway';
+    const deliveryRadius = Number(rawFormData.deliveryRadius);
+    const deliveryCharges = Number(rawFormData.deliveryCharges);
+    const takeawayAddress = rawFormData.takeawayAddress as string;
+    const remarks = rawFormData.remarks as string;
+
+    try {
+        const allBatches = await getCropBatches();
+        const parentBatchIndex = allBatches.findIndex(b => b.id === batchId);
+
+        if (parentBatchIndex === -1) {
+            throw new Error('Batch not found.');
+        }
+
+        const parentBatch = allBatches[parentBatchIndex];
+
+        if (quantityToList <= 0 || quantityToList > parentBatch.quantity) {
+            throw new Error('Invalid quantity specified.');
+        }
+        
+        const listingDetails = {
+            priceInRupees: price,
+            remarks,
+            deliveryOption,
+            deliveryRadius,
+            deliveryCharges,
+            takeawayAddress
+        };
+
+        if (quantityToList === parentBatch.quantity) {
+            // Listing the full remaining quantity, just update the status and add details
+            parentBatch.status = 'listed';
+            Object.assign(parentBatch, listingDetails);
+        } else {
+            // Listing a partial quantity
+            // 1. Reduce the quantity of the parent 'registered' batch
+            parentBatch.quantity -= quantityToList;
+            if (!parentBatch.originalQuantity) {
+                parentBatch.originalQuantity = parentBatch.quantity + quantityToList;
+            }
+
+            // 2. Create a new 'listed' batch for the partial quantity
+            const newPartialBatch: CropBatch = {
+                ...parentBatch,
+                ...listingDetails,
+                id: uuidv4(),
+                parentBatchId: parentBatch.id,
+                originalQuantity: parentBatch.originalQuantity,
+                quantity: quantityToList,
+                status: 'listed',
+            };
+            allBatches.push(newPartialBatch);
+        }
+
+        await saveCropBatches(allBatches);
+        
+        revalidatePath('/dashboard/my-batches');
+        revalidatePath('/dashboard/price-predictor');
+        revalidatePath('/dealer/dashboard/marketplace');
+
+        return { success: true, message: `${quantityToList}kg of ${parentBatch.cropType} listed for sale.` };
+    } catch (error: any) {
+        console.error('Failed to list crop:', error);
+        return { success: false, error: error.message || 'An unknown error occurred.' };
+    }
+}
