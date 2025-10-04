@@ -1,0 +1,551 @@
+
+
+'use client';
+
+import Image from 'next/image';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import React from 'react';
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { WaymarkIcon } from '@/components/icons';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, ArrowRight, BarChart, Leaf, ShoppingCart, Tractor, ChevronsUpDown, Check, Bot, Milestone, Handshake } from 'lucide-react';
+import { checkUserExistsByMobile } from './register/actions';
+import { countries } from '@/lib/countries';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+
+export default function Home() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [mobile, setMobile] = React.useState('');
+  const [countryCode, setCountryCode] = React.useState('91');
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [popoverOpen, setPopoverOpen] = React.useState(false);
+  const [showOtpInput, setShowOtpInput] = React.useState(false);
+  const [otp, setOtp] = React.useState('');
+  const [otpError, setOtpError] = React.useState('');
+  const [userRole, setUserRole] = React.useState<'farmer' | 'dealer' | null>(null);
+
+  const handleLoginRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!mobile) {
+      setError('Please enter a valid mobile number.');
+      return;
+    }
+    if (countryCode === '91' && mobile.length !== 10) {
+      setError('Indian mobile numbers must be 10 digits.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    const fullMobile = `+${countryCode}${mobile}`;
+    
+    // Admin login bypass
+    if (fullMobile === '+910000000000') {
+        setUserRole('admin');
+        setShowOtpInput(true);
+        setIsLoading(false);
+        toast({ title: 'OTP Sent (Simulated)', description: 'Enter 123456 to continue.' });
+        return;
+    }
+    
+    const result = await checkUserExistsByMobile(fullMobile);
+    
+    if (result.success && result.role) {
+      // Simulate sending OTP
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setUserRole(result.role);
+      setShowOtpInput(true);
+      toast({ title: 'OTP Sent (Simulated)', description: 'Enter 123456 to continue.' });
+    } else {
+      setError(result.error || 'This mobile number is not registered.');
+    }
+
+    setIsLoading(false);
+  };
+  
+  const handleVerifyOtpAndLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpError('');
+
+    if (otp !== '123456') {
+      setOtpError('Invalid OTP. Please try again.');
+      return;
+    }
+
+    setIsLoading(true);
+    
+    // Simulate a delay for verification
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    toast({ title: 'Login Successful' });
+    if (userRole === 'admin') {
+      router.push('/admin/dashboard');
+    } else if (userRole === 'dealer') {
+      router.push('/dealer/dashboard');
+    } else {
+      router.push('/dashboard');
+    }
+  };
+
+  const formatMobile = (value: string) => {
+    const limit = countryCode === '91' ? 10 : 15;
+    return value.replace(/\D/g, '').slice(0, limit);
+  };
+
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="container mx-auto flex h-20 items-center justify-between px-4 md:px-6 sticky top-0 z-50 bg-background/80 backdrop-blur-sm">
+        <Link href="/" className="flex items-center gap-2" prefetch={false}>
+          <WaymarkIcon className="h-8 w-8 text-primary" />
+          <span className="text-xl font-bold tracking-tight text-foreground">WayMark</span>
+        </Link>
+        <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+            <Link href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</Link>
+            <Link href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">How It Works</Link>
+            <Link href="#testimonials" className="text-muted-foreground hover:text-foreground transition-colors">Testimonials</Link>
+            <Link href="#contact" className="text-muted-foreground hover:text-foreground transition-colors">Contact</Link>
+        </nav>
+        <nav className="flex items-center gap-4">
+          <Button asChild>
+            <Link href="/register">Get Started</Link>
+          </Button>
+        </nav>
+      </header>
+      <main className="flex-1">
+        <section className="w-full py-12 md:py-24 lg:py-32">
+          <div className="container px-4 md:px-6 grid gap-10 lg:grid-cols-2 lg:gap-16">
+            <div className="flex flex-col justify-center space-y-4">
+              <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl text-foreground">
+                Guiding Every Step with Trust
+              </h1>
+              <p className="max-w-[600px] text-lg text-muted-foreground md:text-xl">
+                WayMark connects farmers directly with dealers, powered by AI-driven insights and secure blockchain technology.
+              </p>
+               <div className="mt-4 flex flex-col gap-4 sm:flex-row">
+                <Button asChild size="lg">
+                  <Link href="/register">
+                    Join as a Farmer <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="secondary">
+                  <Link href="/register?role=dealer">
+                    Join as a Dealer <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-center">
+               <Card className="w-full max-w-md">
+                 <CardContent className="p-6">
+                    {!showOtpInput ? (
+                        <>
+                            <div className="grid gap-2 text-center mb-6">
+                                <h2 className="text-2xl font-bold">Login to your account</h2>
+                                <p className="text-balance text-muted-foreground">
+                                    Enter your mobile number to log in.
+                                </p>
+                            </div>
+                            <form onSubmit={handleLoginRequest}>
+                                <div className="grid gap-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="mobile">Mobile Number</Label>
+                                        <div className="flex gap-2">
+                                            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        className={cn(
+                                                        "w-[150px] justify-between",
+                                                        !countryCode && "text-muted-foreground"
+                                                        )}
+                                                    >
+                                                        {countryCode
+                                                        ? `+${countries.find(
+                                                            (country) => country.dial_code === countryCode
+                                                        )?.dial_code}`
+                                                        : "Select code"}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[250px] p-0">
+                                                    <Command>
+                                                        <CommandInput placeholder="Search country..." />
+                                                        <CommandList>
+                                                            <CommandEmpty>No country found.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                <ScrollArea className="h-72">
+                                                                {countries.map((country) => (
+                                                                    <CommandItem
+                                                                    value={`${country.name} (+${country.dial_code})`}
+                                                                    key={country.code}
+                                                                    onSelect={() => {
+                                                                        setCountryCode(country.dial_code)
+                                                                        setPopoverOpen(false)
+                                                                    }}
+                                                                    >
+                                                                    <Check
+                                                                        className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        country.dial_code === countryCode
+                                                                            ? "opacity-100"
+                                                                            : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    {country.name} (+{country.dial_code})
+                                                                    </CommandItem>
+                                                                ))}
+                                                                </ScrollArea>
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                            <Input
+                                                id="mobile"
+                                                type="tel"
+                                                required
+                                                value={mobile}
+                                                onChange={(e) => setMobile(formatMobile(e.target.value))}
+                                                className="flex-1"
+                                                disabled={isLoading}
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+
+                                <Button type="submit" className="w-full" disabled={isLoading}>
+                                    {isLoading ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
+                                    ) : (
+                                        'Login'
+                                    )}
+                                </Button>
+                                </div>
+                            </form>
+                            <div className="mt-4 text-center text-sm">
+                                Don&apos;t have an account?{' '}
+                                <Link href="/register" className="underline" prefetch={false}>
+                                Sign up
+                                </Link>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="grid gap-2 text-center mb-6">
+                                <h2 className="text-2xl font-bold">Verify OTP</h2>
+                                <p className="text-balance text-muted-foreground">
+                                    Enter the 6-digit code sent to +{countryCode} {mobile}.
+                                </p>
+                            </div>
+                            <form onSubmit={handleVerifyOtpAndLogin}>
+                                <div className="grid gap-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="otp">One-Time Password</Label>
+                                        <Input
+                                            id="otp"
+                                            type="tel"
+                                            maxLength={6}
+                                            required
+                                            value={otp}
+                                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                                            disabled={isLoading}
+                                        />
+                                    </div>
+                                    
+                                {otpError && <p className="text-sm font-medium text-destructive">{otpError}</p>}
+
+                                <Button type="submit" className="w-full" disabled={isLoading}>
+                                    {isLoading ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Logging in...</>
+                                    ) : (
+                                        'Verify & Login'
+                                    )}
+                                </Button>
+                                </div>
+                            </form>
+                            <div className="mt-4 text-center text-sm">
+                                <Button variant="link" onClick={() => { setShowOtpInput(false); setOtp(''); setOtpError(''); setError(''); }}>
+                                Back to login
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                 </CardContent>
+               </Card>
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="w-full py-12 md:py-24 lg:py-32 bg-secondary/50">
+          <div className="container mx-auto px-4 md:px-6">
+            <div className="flex flex-col items-center justify-center space-y-4 text-center">
+              <div className="space-y-2">
+                <div className="inline-block rounded-lg bg-background px-3 py-1 text-sm text-primary font-medium">Key Features</div>
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">A Platform Built for Growth</h2>
+                <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+                  From intelligent pricing to transparent transactions, WayMark provides the tools you need to thrive.
+                </p>
+              </div>
+            </div>
+            <div className="mx-auto grid max-w-5xl items-start gap-8 sm:grid-cols-2 md:gap-12 lg:grid-cols-3 mt-12">
+              <Card className="h-full hover:shadow-lg transition-shadow">
+                <CardContent className="p-6 flex flex-col items-center text-center">
+                   <div className="bg-primary/10 p-4 rounded-full mb-4">
+                      <Handshake className="h-8 w-8 text-primary" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">Direct Farmer-Dealer Connect</h3>
+                  <p className="text-muted-foreground">
+                    Farmers can list crop batches for sale, and dealers can purchase directly, cutting out intermediaries.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="h-full hover:shadow-lg transition-shadow">
+                 <CardContent className="p-6 flex flex-col items-center text-center">
+                   <div className="bg-primary/10 p-4 rounded-full mb-4">
+                      <Bot className="h-8 w-8 text-primary" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">AI-Powered Price Prediction</h3>
+                  <p className="text-muted-foreground">
+                    Leverage our GenAI tool to get optimal price predictions for your crops based on market data.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="h-full hover:shadow-lg transition-shadow">
+                 <CardContent className="p-6 flex flex-col items-center text-center">
+                   <div className="bg-primary/10 p-4 rounded-full mb-4">
+                      <Milestone className="h-8 w-8 text-primary" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">Transparent Supply Chain</h3>
+                  <p className="text-muted-foreground">
+                    All transactions are recorded, providing a clear and immutable history for both parties.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </section>
+
+        <section id="how-it-works" className="w-full py-12 md:py-24 lg:py-32">
+            <div className="container mx-auto px-4 md:px-6">
+                <div className="flex flex-col items-center justify-center space-y-4 text-center">
+                    <div className="space-y-2">
+                        <div className="inline-block rounded-lg bg-secondary px-3 py-1 text-sm font-medium">How It Works</div>
+                        <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">Simple Steps to Success</h2>
+                        <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+                            A streamlined process for farmers to sell and dealers to buy with confidence.
+                        </p>
+                    </div>
+                </div>
+                <div className="mx-auto grid max-w-5xl gap-12 mt-12 items-start md:grid-cols-2">
+                    <div className="space-y-8">
+                        <h3 className="text-2xl font-bold flex items-center gap-3"><Tractor className="h-8 w-8 text-primary"/>For Farmers</h3>
+                        <div className="flex gap-4">
+                            <div className="flex flex-col items-center">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">1</div>
+                                <div className="h-full w-px bg-border my-2"></div>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold">Register Your Batch</h4>
+                                <p className="text-muted-foreground">Add details about your crop, including type, quantity, and harvest date.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-4">
+                            <div className="flex flex-col items-center">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">2</div>
+                                <div className="h-full w-px bg-border my-2"></div>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold">Get AI Price</h4>
+                                <p className="text-muted-foreground">Use our AI tool to predict the best market price for your batch.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-4">
+                             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">3</div>
+                            <div>
+                                <h4 className="font-semibold">Sell to Dealers</h4>
+                                <p className="text-muted-foreground">List your batch on the marketplace and connect directly with verified dealers.</p>
+                            </div>
+                        </div>
+                    </div>
+                     <div className="space-y-8">
+                        <h3 className="text-2xl font-bold flex items-center gap-3"><ShoppingCart className="h-8 w-8 text-accent"/>For Dealers</h3>
+                        <div className="flex gap-4">
+                            <div className="flex flex-col items-center">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground font-bold">1</div>
+                                <div className="h-full w-px bg-border my-2"></div>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold">Discover Batches</h4>
+                                <p className="text-muted-foreground">Browse a wide variety of crop batches listed directly by farmers.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-4">
+                            <div className="flex flex-col items-center">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground font-bold">2</div>
+                                <div className="h-full w-px bg-border my-2"></div>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold">Verify Traceability</h4>
+                                <p className="text-muted-foreground">View the complete, blockchain-verified journey of each batch from farm to you.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-4">
+                             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground font-bold">3</div>
+                            <div>
+                                <h4 className="font-semibold">Purchase Securely</h4>
+                                <p className="text-muted-foreground">Buy with confidence, knowing the transaction is transparent and secure.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+         <section id="testimonials" className="w-full py-12 md:py-24 lg:py-32 bg-secondary/50">
+            <div className="container mx-auto px-4 md:px-6">
+                <div className="flex flex-col items-center justify-center space-y-4 text-center">
+                    <div className="space-y-2">
+                        <div className="inline-block rounded-lg bg-background px-3 py-1 text-sm text-primary font-medium">Testimonials</div>
+                        <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">What Our Users Say</h2>
+                        <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+                            Hear from farmers and dealers who are growing their business with WayMark.
+                        </p>
+                    </div>
+                </div>
+                <div className="mx-auto grid max-w-5xl items-center gap-8 sm:grid-cols-2 md:gap-12 mt-12">
+                    <Card>
+                        <CardContent className="p-6">
+                            <div className="flex items-start gap-4">
+                                <Avatar>
+                                    <AvatarFallback>RK</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <p className="text-lg font-semibold">Rajesh Kumar</p>
+                                    <p className="text-sm text-muted-foreground">Farmer, Punjab</p>
+                                </div>
+                            </div>
+                            <blockquote className="mt-4 border-l-2 pl-4 italic text-muted-foreground">
+                                &ldquo;WayMark has transformed how I sell my crops. The AI pricing helps me get a fair deal, and I get paid much faster. It's a game-changer for farmers like me.&rdquo;
+                            </blockquote>
+                        </CardContent>
+                    </Card>
+                     <Card>
+                        <CardContent className="p-6">
+                            <div className="flex items-start gap-4">
+                                <Avatar>
+                                    <AvatarFallback>AD</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <p className="text-lg font-semibold">Agro Deals Inc.</p>
+                                    <p className="text-sm text-muted-foreground">Dealer, Mumbai</p>
+                                </div>
+                            </div>
+                            <blockquote className="mt-4 border-l-2 pl-4 italic text-muted-foreground">
+                                &ldquo;The transparency is unmatched. I can trace every batch back to the farm, which gives me and my customers total confidence in the product quality. Highly recommended.&rdquo;
+                            </blockquote>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </section>
+
+        <section id="faq" className="w-full py-12 md:py-24 lg:py-32">
+             <div className="container mx-auto px-4 md:px-6">
+                <div className="flex flex-col items-center justify-center space-y-4 text-center">
+                    <div className="space-y-2">
+                        <div className="inline-block rounded-lg bg-secondary px-3 py-1 text-sm font-medium">FAQ</div>
+                        <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">Frequently Asked Questions</h2>
+                         <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+                           Have questions? We've got answers.
+                        </p>
+                    </div>
+                </div>
+                <div className="mx-auto max-w-3xl w-full mt-12">
+                    <Accordion type="single" collapsible>
+                        <AccordionItem value="item-1">
+                            <AccordionTrigger>Is there a fee to use WayMark?</AccordionTrigger>
+                            <AccordionContent>
+                                No, registration is free for both farmers and dealers. We charge a small, transparent transaction fee on successful sales to keep the platform running.
+                            </AccordionContent>
+                        </AccordionItem>
+                        <AccordionItem value="item-2">
+                            <AccordionTrigger>How does the AI price prediction work?</AccordionTrigger>
+                            <AccordionContent>
+                                Our AI analyzes multiple data points, including current market trends, historical prices, crop quality, and location to provide you with a fair and competitive price suggestion.
+                            </AccordionContent>
+                        </AccordionItem>
+                        <AccordionItem value="item-3">
+                            <AccordionTrigger>What is blockchain and why is it used?</AccordionTrigger>
+                            <AccordionContent>
+                                Blockchain is a secure, decentralized digital ledger. We use it to create a tamper-proof record of a crop's journey, ensuring transparency and trust for everyone in the supply chain.
+                            </AccordionContent>
+                        </AccordionItem>
+                         <AccordionItem value="item-4">
+                            <AccordionTrigger>How do I get paid as a farmer?</AccordionTrigger>
+                            <AccordionContent>
+                                Payments are handled securely through the platform. Once a dealer's purchase is confirmed, funds are transferred directly to your registered bank account.
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+                </div>
+             </div>
+        </section>
+
+      </main>
+      <footer id="contact" className="bg-secondary/50 border-t">
+        <div className="container mx-auto py-12 px-4 md:px-6 grid gap-8 md:grid-cols-3">
+            <div>
+                <div className="flex items-center gap-2 mb-4">
+                    <WaymarkIcon className="h-8 w-8 text-primary" />
+                    <span className="text-xl font-bold">WayMark</span>
+                </div>
+                <p className="text-muted-foreground max-w-sm">
+                    Guiding every step of the agricultural supply chain with trust and technology.
+                </p>
+            </div>
+            <div className="grid gap-4">
+                <h3 className="text-lg font-semibold">Quick Links</h3>
+                <Link href="#features" className="text-muted-foreground hover:text-foreground">Features</Link>
+                <Link href="/register" className="text-muted-foreground hover:text-foreground">Register</Link>
+                <Link href="#faq" className="text-muted-foreground hover:text-foreground">FAQ</Link>
+            </div>
+             <div>
+                <h3 className="text-lg font-semibold">Contact Us</h3>
+                <div className="space-y-2 text-muted-foreground">
+                    <p>Email: <a href="mailto:support@waymark.com" className="hover:text-foreground">support@waymark.com</a></p>
+                    <p>Phone: <a href="tel:+911234567890" className="hover:text-foreground">+91 123 456 7890</a></p>
+                    <p>123 Agri-Tech Avenue, Bangalore, India</p>
+                </div>
+            </div>
+        </div>
+        <div className="bg-background border-t">
+          <div className="container mx-auto py-6 px-4 md:px-6 flex flex-col sm:flex-row items-center justify-between">
+            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} WayMark. All rights reserved.</p>
+            <div className="flex items-center gap-4 mt-4 sm:mt-0">
+               <p className="text-sm text-muted-foreground">Terms of Service</p>
+               <p className="text-sm text-muted-foreground">Privacy Policy</p>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
