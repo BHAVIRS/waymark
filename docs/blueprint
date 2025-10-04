@@ -1,0 +1,21 @@
+# **App Name**: WayMark
+
+## Core Features:
+
+- User Registration: Allow farmers and dealers to register with distinct profiles, capturing necessary information such as name, contact details, location, and identification numbers (e.g., Aadhar Number, Kissan ID). Registration process on blockchain.
+- Crop Batch Registration: Enable farmers to register crop batches with details like crop type, quantity, and harvest date.
+- Batch Listing: Allow farmers to list their registered batches for sale, specifying price and availability.
+- Dealer Purchase: Enable dealers to view listed batches and make purchase requests.
+- AI-Powered Pricing Prediction: Offer AI-driven tool to predict optimal crop prices based on market trends, seasonality, and crop data.
+- Transaction Dashboard: Provide dashboards for both farmers and dealers to track transactions, view history, and manage their listings/purchases.
+- Supply Chain Visualization: Visualize the agricultural supply chain from farm to dealer using blockchain.
+
+## Style Guidelines:
+
+- Primary color: Vibrant green (#90EE90) to represent agriculture and freshness.
+- Background color: Light green (#F0FFF0) for a soft, natural feel.
+- Accent color: Earthy brown (#A0522D) to complement the green theme and represent soil.
+- Body and headline font: 'PT Sans', a humanist sans-serif, for a modern, readable, and slightly warm feel.
+- Use clear and relevant icons related to farming, crops, and transactions.
+- Clean and intuitive layout with clear separation of information for easy navigation.
+- Subtle transitions and animations to enhance user experience.
