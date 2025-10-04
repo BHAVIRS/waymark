@@ -1,0 +1,333 @@
+
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Mountain, Waves, TestTube2, Package, ArrowRight, Award, Sun, Cloud, CloudRain, Wind, Sprout, Trophy, IndianRupee, ShoppingCart } from 'lucide-react';
+import Link from 'next/link';
+import WaymarkScoreGauge from '@/components/ui/waymark-score-gauge';
+import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { users, supplyChainEvents, getCropBatches, getTransactions } from '@/lib/data';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+
+export default async function DashboardPage() {
+  const waymarkScore = 85;
+  const currentUserId = 'farmer-1';
+
+  const forecast = [
+    { day: 'Mon', icon: <Sun className="h-6 w-6 text-yellow-500" />, high: 32, low: 24, wind: 10 },
+    { day: 'Tue', icon: <Cloud className="h-6 w-6 text-gray-400" />, high: 30, low: 23, wind: 12 },
+    { day: 'Wed', icon: <Sun className="h-6 w-6 text-yellow-500" />, high: 33, low: 25, wind: 8 },
+    { day: 'Thu', icon: <CloudRain className="h-6 w-6 text-blue-500" />, high: 28, low: 22, wind: 15 },
+    { day: 'Fri', icon: <Cloud className="h-6 w-6 text-gray-400" />, high: 29, low: 23, wind: 11 },
+    { day: 'Sat', icon: <Sun className="h-6 w-6 text-yellow-500" />, high: 34, low: 26, wind: 9 },
+    { day: 'Sun', icon: <CloudRain className="h-6 w-6 text-blue-500" />, high: 27, low: 21, wind: 18 },
+  ];
+
+  const leaderboard = users.filter(u => u.role === 'farmer').slice(0, 3).map((u, i) => ({
+    ...u,
+    score: 92 - i * 5
+  }));
+
+  const cropBatches = await getCropBatches();
+  const transactions = await getTransactions();
+  const myBatches = cropBatches.filter(b => b.farmerId === currentUserId);
+  const listedBatchesCount = myBatches.filter(b => b.status === 'listed').length;
+  const registeredBatchesCount = myBatches.filter(b => b.status === 'registered').length;
+  const activeBatchesCount = listedBatchesCount + registeredBatchesCount;
+  
+  const recentTransactions = transactions
+    .filter(t => t.farmerId === currentUserId)
+    .sort((a,b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())
+    .slice(0, 5);
+
+  const myOriginalBatchIds = new Set(myBatches.map(b => b.id));
+  
+  const allMyBatchIds = new Set(cropBatches.filter(b => b.farmerId === currentUserId).map(b => b.id));
+  const retailSales = supplyChainEvents.filter(e => {
+    const eventBatch = cropBatches.find(b => b.id === e.batchId);
+    return e.type === 'SALE' && e.actor.role === 'RETAILER' && eventBatch && allMyBatchIds.has(eventBatch.parentBatchId || eventBatch.id);
+  });
+
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">
+          Welcome back! Here's your farm's overview.
+        </p>
+      </div>
+      
+       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+         <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium">WayMark Score</CardTitle>
+            <Award className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="grid md:grid-cols-2 gap-4 items-center">
+            <div>
+              <WaymarkScoreGauge score={waymarkScore} />
+              <p className="text-xs text-center text-muted-foreground mt-2">
+                  Your score reflects your activity & crop quality.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <h4 className="flex items-center font-semibold text-base"><Trophy className="h-5 w-5 mr-2 text-yellow-500" />Leaderboard</h4>
+              <ul className="space-y-3">
+                {leaderboard.map((farmer, index) => (
+                  <li key={farmer.id} className="flex items-center gap-3">
+                    <span className="font-bold text-lg text-muted-foreground w-4">
+                      {index + 1}
+                    </span>
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback>{farmer.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium leading-none">{farmer.name}</p>
+                      <p className="text-xs text-muted-foreground">{farmer.location}</p>
+                    </div>
+                    <div className="font-bold text-primary">{farmer.score}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="lg:col-span-1 flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base font-medium">
+              Active Batches
+              </CardTitle>
+              <Package className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="flex-grow flex flex-col justify-between">
+              <div>
+                <div className="text-4xl font-bold">{activeBatchesCount}</div>
+                <p className="text-xs text-muted-foreground">
+                    {listedBatchesCount} listed, {registeredBatchesCount} registered
+                </p>
+              </div>
+              <Button className="mt-4 w-full" asChild>
+                <Link href="/dashboard/my-batches">
+                    Show Batches <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium">
+              Land Condition
+            </CardTitle>
+            <Mountain className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Waves className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm font-medium">SOIL MOISTURE</span>
+                </div>
+                <span className="text-sm font-semibold">62%</span>
+              </div>
+              <Progress value={62} aria-label="62% soil moisture" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                 <div className="flex items-center gap-2">
+                    <TestTube2 className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-sm font-medium">NUTRIENT LEVEL</span>
+                </div>
+                <span className="text-sm font-semibold text-primary">Optimal</span>
+              </div>
+              <Progress value={90} aria-label="Optimal nutrient level" />
+            </div>
+          </CardContent>
+        </Card>
+         <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium">
+              Crop Condition
+            </CardTitle>
+            <Sprout className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Sun className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm font-medium">HEALTH</span>
+                </div>
+                <span className="text-sm font-semibold text-primary">Healthy</span>
+              </div>
+              <Progress value={95} aria-label="95% crop health" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                 <div className="flex items-center gap-2">
+                    <TestTube2 className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-sm font-medium">GROWTH STAGE</span>
+                </div>
+                <span className="text-sm font-semibold">Vegetative</span>
+              </div>
+              <Progress value={60} aria-label="Vegetative growth stage" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base font-medium">7-Day Weather Forecast</CardTitle>
+          <p className="text-sm text-muted-foreground">Punjab, India</p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-around items-stretch text-center h-full gap-2">
+              {forecast.map((day) => (
+                  <div key={day.day} className="flex flex-col items-center gap-3 p-2 rounded-lg hover:bg-muted/50 w-full">
+                      <p className="font-semibold text-sm">{day.day}</p>
+                      {day.icon}
+                      <p className="text-sm font-medium">{day.high}° / {day.low}°</p>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Wind className="h-4 w-4" />
+                          <span>{day.wind} km/h</span>
+                      </div>
+                  </div>
+              ))}
+          </div>
+        </CardContent>
+      </Card>
+
+       <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Transactions</CardTitle>
+            <CardDescription>Your recent crop sales to dealers.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Crop</TableHead>
+                  <TableHead>Sold To</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentTransactions.map((tx) => {
+                  const txBatch = cropBatches.find(b => b.id === tx.batchId);
+                  const rootBatch = cropBatches.find(b => b.id === txBatch?.parentBatchId) || txBatch;
+                  const dealer = users.find(u => u.id === tx.dealerId);
+                  return (
+                    <TableRow key={tx.id}>
+                      <TableCell>
+                        <div className="font-medium">{rootBatch?.cropType}</div>
+                        <div className="text-sm text-muted-foreground">{tx.quantity.toLocaleString()} kg</div>
+                      </TableCell>
+                      <TableCell>{dealer?.name}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        <div className="flex items-center justify-end">
+                            <IndianRupee className="h-4 w-4 mr-1" />
+                            {tx.totalAmountInRupees.toLocaleString()}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">{new Date(tx.purchaseDate).toLocaleDateString('en-GB')}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Retail Sales</CardTitle>
+            <CardDescription>
+              Track your produce reaching the final customer.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+             <div className="max-h-96 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Crop</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead className="hidden sm:table-cell">Date</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {retailSales.length > 0 ? (
+                      retailSales.map((sale) => {
+                        const batch = cropBatches.find(b => b.id === sale.batchId);
+                        const rootBatch = cropBatches.find(b => b.id === batch?.parentBatchId) || batch;
+                        return (
+                          <TableRow key={sale.id}>
+                            <TableCell>
+                              <div className="font-medium">{rootBatch?.cropType}</div>
+                              <div className="text-sm text-muted-foreground font-mono text-xs">
+                                <Link
+                                  href={`/dashboard/supply-chain/${rootBatch?.id}?userId=${currentUserId}&saleId=${sale.id}`}
+                                  className="text-primary underline hover:text-primary/80"
+                                >
+                                  {`${rootBatch?.id.substring(0, 14)}...`}
+                                </Link>
+                              </div>
+                            </TableCell>
+                            <TableCell>{sale.iotData?.location}</TableCell>
+                            <TableCell className="hidden sm:table-cell">
+                              {new Date(sale.timestamp).toLocaleDateString('en-GB')}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="outline" size="sm" asChild>
+                                <Link href={`/dashboard/supply-chain/${rootBatch?.id}?userId=${currentUserId}&saleId=${sale.id}`}>
+                                  View Trace
+                                </Link>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="h-24 text-center"
+                        >
+                          No retail sales yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+    
