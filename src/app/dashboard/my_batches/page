@@ -1,0 +1,199 @@
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { getCropBatches } from '@/lib/data';
+import { Button } from '@/components/ui/button';
+import { PlusCircle, File, ListFilter, ArrowRight } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Link from 'next/link';
+import type { CropBatch } from '@/lib/types';
+
+function BatchesTable({ batches, emptyMessage, currentUserId }: { batches: CropBatch[], emptyMessage: string, currentUserId: string }) {
+    return (
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Batch ID</TableHead>
+                    <TableHead>Crop</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Harvest Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {batches.length > 0 ? batches.map((batch) => (
+                    <TableRow key={batch.id}>
+                        <TableCell className="font-mono text-xs">
+                             <Link 
+                                href={batch.txHash ? `https://sepolia.etherscan.io/tx/${batch.txHash}` : `/dashboard/supply-chain/${batch.parentBatchId || batch.id}?userId=${currentUserId}`} 
+                                className="text-blue-600 underline hover:text-blue-800"
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                title={batch.txHash ? "View on Etherscan" : "View Trace"}
+                            >
+                                {`${(batch.parentBatchId || batch.id).substring(0, 10)}...`}
+                                {batch.parentBatchId && <span className="text-muted-foreground"> (Partial)</span>}
+                            </Link>
+                        </TableCell>
+                        <TableCell>{batch.cropType}</TableCell>
+                        <TableCell>{batch.quantity} kg</TableCell>
+                        <TableCell>
+                            <Badge
+                                variant={
+                                    batch.status === 'sold'
+                                        ? 'destructive'
+                                        : batch.status === 'listed'
+                                            ? 'secondary'
+                                            : 'default'
+                                }
+                            >
+                                {batch.status}
+                            </Badge>
+                        </TableCell>
+                        <TableCell>
+                            {new Date(batch.harvestDate).toLocaleDateString('en-GB')}
+                        </TableCell>
+                        <TableCell className="space-x-2">
+                             <Button variant="outline" size="sm" asChild>
+                                <Link href={`/dashboard/supply-chain/${batch.parentBatchId || batch.id}?userId=${currentUserId}`}>View Trace</Link>
+                            </Button>
+                            {batch.status === 'registered' && (
+                                <Button variant="secondary" size="sm" asChild>
+                                    <Link href={`/dashboard/price-predictor?batchId=${batch.id}`}>
+                                        List Now <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Link>
+                                </Button>
+                            )}
+                        </TableCell>
+                    </TableRow>
+                )) : (
+                    <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center">
+                            {emptyMessage}
+                        </TableCell>
+                    </TableRow>
+                )}
+            </TableBody>
+        </Table>
+    );
+}
+
+
+export default async function MyBatchesPage() {
+  const currentUserId = 'farmer-1'; // Assuming logged in farmer
+  const cropBatches = await getCropBatches();
+  const myBatches = cropBatches.filter(b => b.farmerId === currentUserId);
+
+  const registeredBatches = myBatches.filter(b => b.status === 'registered');
+  const listedBatches = myBatches.filter(b => b.status === 'listed');
+  const soldBatches = myBatches.filter(b => b.status === 'sold');
+
+
+  return (
+    <Tabs defaultValue="registered">
+      <div className="flex items-center">
+        <TabsList>
+          <TabsTrigger value="registered">Registered</TabsTrigger>
+          <TabsTrigger value="listed">Listed</TabsTrigger>
+          <TabsTrigger value="sold">Sold</TabsTrigger>
+        </TabsList>
+        <div className="ml-auto flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1">
+                <ListFilter className="h-3.5 w-3.5" />
+                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                  Filter
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Filter by</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem checked>
+                Active
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem>Archived</DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" variant="outline" className="h-8 gap-1">
+            <File className="h-3.5 w-3.5" />
+            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+              Export
+            </span>
+          </Button>
+          <Button asChild size="sm" className="h-8 gap-1">
+            <Link href="/dashboard/my-batches/add">
+              <PlusCircle className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Add Batch
+              </span>
+            </Link>
+          </Button>
+        </div>
+      </div>
+      <TabsContent value="registered">
+        <Card>
+          <CardHeader>
+            <CardTitle>Registered Batches</CardTitle>
+            <CardDescription>
+              Crops you have registered but not yet listed for sale.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BatchesTable batches={registeredBatches} emptyMessage="You have no registered batches." currentUserId={currentUserId} />
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="listed">
+        <Card>
+          <CardHeader>
+            <CardTitle>Listed Batches</CardTitle>
+            <CardDescription>
+              Crops currently listed on the marketplace for dealers to buy.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+             <BatchesTable batches={listedBatches} emptyMessage="You have no listed batches for sale." currentUserId={currentUserId} />
+          </CardContent>
+        </Card>
+      </TabsContent>
+       <TabsContent value="sold">
+        <Card>
+          <CardHeader>
+            <CardTitle>Sold Batches</CardTitle>
+            <CardDescription>
+              A history of your successfully sold crop batches.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+             <BatchesTable batches={soldBatches} emptyMessage="You have not sold any batches yet." currentUserId={currentUserId} />
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+  );
+}
