@@ -1,0 +1,49 @@
+
+import { getNewsFeed } from './actions';
+import { NewsFeedClient } from './client';
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from '@/components/ui/card';
+import { AlertTriangle, Bell } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+export default async function NewsFeedPage() {
+  const newsResult = await getNewsFeed();
+
+  return (
+    <div>
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>News Feed</CardTitle>
+          <CardDescription>
+            Your daily briefing on agricultural news, market trends, and policy updates.
+          </CardDescription>
+        </CardHeader>
+        <CardFooter>
+            <Button>
+                <Bell className="mr-2 h-4 w-4" /> Subscribe
+            </Button>
+        </CardFooter>
+      </Card>
+      {newsResult.success && newsResult.data ? (
+        <NewsFeedClient articles={newsResult.data} />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="text-destructive" />
+              Could not load news feed
+            </CardTitle>
+            <CardDescription>
+              There was an error fetching the latest news. Please try again later.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+    </div>
+  );
+}
