@@ -1,0 +1,50 @@
+'use server';
+/**
+ * @fileOverview An AI agent to generate agricultural news articles.
+ *
+ * - generateNewsFeed - Generates a list of news articles.
+ * - NewsArticle - The output type for a single news article.
+ */
+
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
+
+const NewsArticleSchema = z.object({
+  headline: z.string().describe('The headline of the news article.'),
+  summary: z.string().describe('A short summary of the news article (2-3 sentences).'),
+  category: z.string().describe('A relevant category for the news (e.g., Market Update, Policy, Technology, Weather, Labor).'),
+  publishedDate: z.string().describe('The publication date in a readable format (e.g., "July 2, 2024").'),
+  imageHint: z.string().describe('Two keywords for finding a relevant stock photo for the article (e.g., "onion market", "farmer protest").'),
+});
+
+const NewsFeedOutputSchema = z.array(NewsArticleSchema);
+
+export type NewsArticle = z.infer<typeof NewsArticleSchema>;
+export type NewsFeedOutput = z.infer<typeof NewsFeedOutputSchema>;
+
+
+export async function generateNewsFeed(topics: string[]): Promise<NewsFeedOutput> {
+  return newsFeedFlow(topics);
+}
+
+const prompt = ai.definePrompt({
+  name: 'newsFeedPrompt',
+  input: {schema: z.array(z.string())},
+  output: {schema: NewsFeedOutputSchema},
+  prompt: `You are an agricultural news editor. Generate a diverse list of 5-7 news articles based on the following topics: {{{json this}}}.
+
+  The articles should be recent and relevant to Indian farmers. Ensure a mix of categories. For each article, provide a headline, a short summary, a category, a plausible recent published date, and a two-word hint for a stock photo.
+  `,
+});
+
+const newsFeedFlow = ai.defineFlow(
+  {
+    name: 'newsFeedFlow',
+    inputSchema: z.array(z.string()),
+    outputSchema: NewsFeedOutputSchema,
+  },
+  async (topics) => {
+    const {output} = await prompt(topics);
+    return output!;
+  }
+);
