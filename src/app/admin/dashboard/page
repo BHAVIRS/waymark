@@ -1,0 +1,108 @@
+
+import { promises as fs } from 'fs';
+import path from 'path';
+import type { User } from '@/lib/types';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+
+const usersFilePath = path.join(process.cwd(), 'src', 'lib', 'db', 'users.json');
+
+async function getUsers(): Promise<User[]> {
+  try {
+    const data = await fs.readFile(usersFilePath, 'utf-8');
+    // Filter out the admin user from the list shown in the UI
+    return JSON.parse(data).filter((user: User) => user.role !== 'admin');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
+    }
+    console.error('Failed to read users.json:', error);
+    return [];
+  }
+}
+
+export default async function AdminDashboardPage() {
+  const users = await getUsers();
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8">
+       <div className="flex items-center justify-between mb-6">
+        <div>
+            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+            <p className="text-muted-foreground">Manage and view all registered users.</p>
+        </div>
+        <Button asChild>
+            <Link href="/">Logout</Link>
+        </Button>
+       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Registered Users</CardTitle>
+          <CardDescription>
+            A list of all farmers and dealers who have registered on the platform.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Aadhar</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.length > 0 ? (
+                users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="font-medium">{user.name}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.role === 'farmer' ? 'secondary' : 'outline'}>
+                        {user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{user.location}</TableCell>
+                    <TableCell>{user.email || 'N/A'}</TableCell>
+                    <TableCell className="font-mono">{user.aadharNumber || 'N/A'}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center">
+                    No registered users yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
