@@ -1,0 +1,9 @@
+import { AddBatchClient } from './client';
+
+export default function AddBatchPage() {
+  return (
+    <div>
+      <AddBatchClient />
+    </div>
+  );
+}
