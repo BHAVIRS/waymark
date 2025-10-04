@@ -1,0 +1,21 @@
+
+
+import { SupplyChainTimeline } from '@/components/supply-chain-timeline';
+
+export default async function SupplyChainTracePage({ params, searchParams }: { params: { id: string }, searchParams: { userId: string, saleId?: string } }) {
+  
+  const backLink = searchParams.userId.startsWith('dealer') ? '/dealer/dashboard/holdings' : '/dashboard/my-batches';
+
+  return (
+    <div className="container mx-auto max-w-4xl py-8">
+       <SupplyChainTimeline 
+            batchId={params.id} 
+            currentUserId={searchParams.userId} 
+            saleId={searchParams.saleId}
+            showTitle={true}
+            backLink={backLink}
+        />
+    </div>
+  );
+}
+
