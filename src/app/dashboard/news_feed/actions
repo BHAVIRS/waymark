@@ -1,0 +1,22 @@
+'use server';
+
+import { generateNewsFeed, type NewsArticle } from '@/ai/flows/news-feed-flow';
+
+export async function getNewsFeed(): Promise<{ success: boolean; data?: NewsArticle[]; error?: string; }> {
+  try {
+    const topics = [
+      "Farmer protests and labor strikes in India",
+      "New government farming subsidies or policies",
+      "Price fluctuations of key crops like onions, tomatoes, and wheat",
+      "Innovations in sustainable farming and agricultural technology",
+      "Monsoon weather predictions and their impact on crops",
+      "Export/import news affecting local market prices",
+      "Pest outbreaks or crop disease warnings"
+    ];
+    const result = await generateNewsFeed(topics);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Error generating news feed:', error);
+    return { success: false, error: 'Failed to generate news feed.' };
+  }
+}
