@@ -1,0 +1,18 @@
+
+import { Suspense } from 'react';
+import { PricePredictorClient } from './client';
+import { getRegisteredBatchesForFarmer } from './actions';
+
+export default async function PricePredictorPage() {
+  // In a real app, you'd get this from the user's session
+  const currentUserId = 'farmer-1';
+  const registeredBatches = await getRegisteredBatchesForFarmer(currentUserId);
+
+  return (
+    <div>
+        <Suspense fallback={<div>Loading form...</div>}>
+            <PricePredictorClient registeredBatches={registeredBatches} />
+        </Suspense>
+    </div>
+  );
+}
