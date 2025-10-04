@@ -1,0 +1,58 @@
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Search } from 'lucide-react';
+import { SupplyChainTimeline } from '@/components/supply-chain-timeline';
+import { Suspense } from 'react';
+
+function TimelineDisplay({ batchId }: { batchId: string }) {
+    // In a real app, the userId would come from the session
+    const currentUserId = 'farmer-1'; 
+    return (
+        <div className="mt-8">
+            <SupplyChainTimeline 
+                batchId={batchId} 
+                currentUserId={currentUserId} 
+                showTitle={false} 
+            />
+        </div>
+    );
+}
+
+export default async function SupplyChainPage({ searchParams }: { searchParams?: { batchId?: string }}) {
+  const batchId = searchParams?.batchId;
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Supply Chain Traceability</CardTitle>
+          <CardDescription>
+            Enter a Batch ID to trace its journey from farm to the final customer.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="flex w-full max-w-sm items-center space-x-2">
+            <Input type="text" name="batchId" placeholder="Enter Batch ID" defaultValue={batchId || ''} />
+            <Button type="submit">
+              <Search className="mr-2 h-4 w-4" /> Trace
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+      
+      {batchId && (
+        <Suspense fallback={<div>Loading timeline...</div>}>
+            <TimelineDisplay batchId={batchId} />
+        </Suspense>
+      )}
+    </div>
+  );
+}
