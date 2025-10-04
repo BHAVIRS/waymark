@@ -1,0 +1,48 @@
+
+'use server';
+
+import { getCropBatches, saveCropBatches } from '@/lib/data';
+import type { CropBatch } from '@/lib/types';
+import { revalidatePath } from 'next/cache';
+import { v4 as uuidv4 } from 'uuid';
+
+export async function simulateRegisterBatch(formData: FormData) {
+  const values = Object.fromEntries(formData.entries());
+
+  try {
+    const allBatches = await getCropBatches();
+    
+    // Simulate a blockchain transaction hash
+    const simulatedTxHash = `0x${[...Array(64)].map(() => Math.floor(Math.random() * 16).toString(16)).join('')}`;
+    
+    const newBatch: CropBatch = {
+        id: uuidv4(),
+        farmerId: 'farmer-1', // In a real app, this would come from the user's session
+        cropType: values.cropType as string,
+        variety: values.variety as string,
+        quantity: Number(values.quantity),
+        plantingDate: values.plantingDate as string,
+        expectedHarvestDate: values.expectedHarvestDate as string,
+        harvestDate: values.expectedHarvestDate as string, 
+        farmLocation: values.farmLocation as string,
+        status: 'registered',
+        seedName: values.seedName as string,
+        qualityScore: Number(values.qualityScore),
+        mfgDate: values.mfgDate as string,
+        landArea: Number(values.landArea),
+        txHash: simulatedTxHash
+    };
+    
+    allBatches.push(newBatch);
+    await saveCropBatches(allBatches);
+
+    revalidatePath('/dashboard/my-batches');
+    revalidatePath('/dashboard');
+
+    return { success: true, message: `Batch registered successfully! Simulated TxHash: ${simulatedTxHash}`, txHash: simulatedTxHash };
+
+  } catch (error: any) {
+    console.error('Simulation failed:', error);
+    return { success: false, error: `Failed to register batch: ${error.message}` };
+  }
+}
